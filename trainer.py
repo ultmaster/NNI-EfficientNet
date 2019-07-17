@@ -76,106 +76,127 @@ def get_ema_vars():
 
 def model_fn(features, labels, mode, params):
     blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
-    logits, endpoints = build_model(features, blocks_args, global_params, mode == tf.estimator.ModeKeys.TRAIN)
+    model = build_model(blocks_args, global_params)
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    x_train = x_train.astype('float32')
+    x_test = x_test.astype('float32')
+    x_train /= 255
+    x_test /= 255
 
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        predictions = {
-            'classes': tf.argmax(logits, axis=1),
-            'probabilities': tf.nn.softmax(logits, name='softmax_tensor')
-        }
-        return tf.estimator.EstimatorSpec(
-            mode=mode,
-            predictions=predictions,
-            export_outputs={
-                'classify': tf.estimator.export.PredictOutput(predictions)
-            })
+    model.compile(loss='categorical_crossentropy', optimizer=tf.train.RMSPropOptimizer(0.256), metrics=["accuracy"])
+    model.fit(x_train, y_train,
+              batch_size=8,
+              epochs=5,
+              validation_data=(x_test, y_test),
+              shuffle=True)
+    scores = model.evaluate(x_test, y_test, verbose=1)
+    print("test accuracy", scores[1])
 
-    # Calculate loss, which includes softmax cross entropy and L2 regularization.
-    one_hot_labels = tf.one_hot(tf.reshape(labels, (-1, )), params["num_label_classes"])
-    cross_entropy = tf.losses.softmax_cross_entropy(
-        logits=logits,
-        onehot_labels=one_hot_labels,
-        label_smoothing=params["label_smoothing"])
 
-    # Add weight decay to the loss for non-batch-normalization variables.
-    loss = cross_entropy + params["weight_decay"] * tf.add_n(
-        [tf.nn.l2_loss(v) for v in tf.trainable_variables()
-         if 'batch_normalization' not in v.name])
-    loss = tf.identity(loss, "loss")
+    #     # resolution is defined in the image tensor
+    #     logits = model(images, training=training)
+    #
+    # logits = tf.identity(logits, 'logits')
+    # return logits, model
+    #
 
-    global_step = tf.train.get_global_step()
+    # blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
+    # logits, endpoints = build_model(features, blocks_args, global_params, mode == tf.estimator.ModeKeys.TRAIN)
+    #
+    # # Calculate loss, which includes softmax cross entropy and L2 regularization.
+    # one_hot_labels = tf.one_hot(tf.reshape(labels, (-1, )), params["num_label_classes"])
+    # cross_entropy = tf.losses.softmax_cross_entropy(
+    #     logits=logits,
+    #     onehot_labels=one_hot_labels,
+    #     label_smoothing=params["label_smoothing"])
+    #
+    # # Add weight decay to the loss for non-batch-normalization variables.
+    # loss = cross_entropy + params["weight_decay"] * tf.add_n(
+    #     [tf.nn.l2_loss(v) for v in tf.trainable_variables()
+    #      if 'batch_normalization' not in v.name])
+    # loss = tf.identity(loss, "loss")
+    #
+    # global_step = tf.train.get_global_step()
+    #
+    # if params["moving_average_decay"] > 0:
+    #     ema = tf.train.ExponentialMovingAverage(
+    #         decay=params["moving_average_decay"], num_updates=global_step)
+    #     ema_vars = get_ema_vars()
+    #
+    # # Compute the current epoch and associated learning rate from global_step.
+    # steps_per_epoch = params["steps_per_epoch"]
+    # scaled_lr = params["base_learning_rate"] * (params["batch_size"] / 256.0)
+    # learning_rate = build_learning_rate(scaled_lr, global_step, steps_per_epoch)
+    # optimizer = build_optimizer(learning_rate)
+    #
+    # # Batch normalization requires UPDATE_OPS to be added as a dependency to
+    # # the train operation.
+    # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    # with tf.control_dependencies(update_ops):
+    #     train_op = optimizer.minimize(loss, global_step)
+    # if params["moving_average_decay"] > 0:
+    #     with tf.control_dependencies([train_op]):
+    #         train_op = ema.apply(ema_vars)
+    #
+    # if mode == tf.estimator.ModeKeys.EVAL:
+    #     predictions = tf.argmax(logits, axis=1)
+    #     top_1_accuracy = tf.metrics.accuracy(labels, predictions)
+    #
+    #     in_top_5 = tf.cast(tf.nn.in_top_k(logits, labels, 5), tf.float32)
+    #     top_5_accuracy = tf.metrics.mean(in_top_5)
+    #
+    #     metrics = {
+    #         'top_1_accuracy': top_1_accuracy,
+    #         'top_5_accuracy': top_5_accuracy,
+    #     }
+    #
+    #     return tf.estimator.EstimatorSpec(
+    #         mode=mode, loss=loss, eval_metric_ops=metrics)
+    #
+    # num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
+    # tf.logging.info('number of trainable parameters: {}'.format(num_params))
+    #
+    # return tf.estimator.EstimatorSpec(
+    #     mode=mode, loss=loss, train_op=train_op)
 
-    if params["moving_average_decay"] > 0:
-        ema = tf.train.ExponentialMovingAverage(
-            decay=params["moving_average_decay"], num_updates=global_step)
-        ema_vars = get_ema_vars()
 
-    # Compute the current epoch and associated learning rate from global_step.
-    steps_per_epoch = params["steps_per_epoch"]
-    scaled_lr = params["base_learning_rate"] * (params["batch_size"] / 256.0)
-    learning_rate = build_learning_rate(scaled_lr, global_step, steps_per_epoch)
-    optimizer = build_optimizer(learning_rate)
-
-    # Batch normalization requires UPDATE_OPS to be added as a dependency to
-    # the train operation.
-    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops):
-        train_op = optimizer.minimize(loss, global_step)
-    if params["moving_average_decay"] > 0:
-        with tf.control_dependencies([train_op]):
-            train_op = ema.apply(ema_vars)
-
-    if mode == tf.estimator.ModeKeys.EVAL:
-        predictions = tf.argmax(logits, axis=1)
-        top_1_accuracy = tf.metrics.accuracy(labels, predictions)
-
-        in_top_5 = tf.cast(tf.nn.in_top_k(logits, labels, 5), tf.float32)
-        top_5_accuracy = tf.metrics.mean(in_top_5)
-
-        metrics = {
-            'top_1_accuracy': top_1_accuracy,
-            'top_5_accuracy': top_5_accuracy,
-        }
-
-        return tf.estimator.EstimatorSpec(
-            mode=mode, loss=loss, eval_metric_ops=metrics)
-
-    num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
-    tf.logging.info('number of trainable parameters: {}'.format(num_params))
-
-    return tf.estimator.EstimatorSpec(
-        mode=mode, loss=loss, train_op=train_op)
+def _preprocess_func(image, label):
+    return tf.image.resize_image_with_pad(image, 224, 224), label
 
 
 def train_input_fn(features, labels, batch_size):
-    """An input function for training"""
-    # Convert the inputs to a Dataset.
-    dataset = tf.data.Dataset.from_tensor_slices((tf.image.convert_image_dtype(features, tf.float32), labels))
-    # Shuffle, repeat, and batch the examples.
+    dataset = tf.data.Dataset.from_tensor_slices(((features / 255.).astype(np.float32), labels))
+    dataset = dataset.map(lambda image, label: tuple(tf.py_func(
+        _preprocess_func, [image, label], [tf.float32, label.dtype]
+    )))
     dataset = dataset.shuffle(1000).repeat().batch(batch_size)
     return dataset
 
 
 def eval_input_fn(features, labels, batch_size):
-    dataset = tf.data.Dataset.from_tensor_slices((tf.image.convert_image_dtype(features, tf.float32), labels))
+    dataset = tf.data.Dataset.from_tensor_slices(((features / 255.).astype(np.float32), labels))
+    dataset = dataset.map(lambda image, label: tuple(tf.py_func(
+        _preprocess_func, [image, label], [tf.float32, label.dtype]
+    )))
     return dataset.batch(batch_size)
 
 
 def main(args):
+
     tf.logging.set_verbosity(tf.logging.INFO)
-    tf.enable_eager_execution()
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     params = vars(args)
     tf.logging.info("Running on %d samples" % x_train.shape[0])
     params["steps_per_epoch"] = x_train.shape[0] / args.batch_size
-    classifier = tf.estimator.Estimator(model_fn=model_fn, params=params)
-
-    logging_hook = tf.train.LoggingTensorHook(tensors={"loss": "loss"}, every_n_iter=1)
-    train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(x_train, y_train, args.batch_size),
-                                        hooks=[logging_hook])
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(x_test, y_test, args.batch_size))
-
-    tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
+    # classifier = tf.estimator.Estimator(model_fn=model_fn, params=params)
+    model_fn(x_train, y_train, 0, params)
+    #
+    # logging_hook = tf.train.LoggingTensorHook(tensors={"loss": "loss"}, every_n_iter=1)
+    # train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(x_train, y_train, args.batch_size),
+    #                                     hooks=[logging_hook])
+    # eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(x_test, y_test, args.batch_size))
+    #
+    # tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
 
 if __name__ == "__main__":

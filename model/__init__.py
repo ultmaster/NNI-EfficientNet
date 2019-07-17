@@ -54,11 +54,10 @@ def get_pretrained_model_params(model_name, override_params):
     return blocks_args, global_params
 
 
-def build_model(images, blocks_args, global_params, training, model_dir=None):
+def build_model(blocks_args, global_params, model_dir=None):
     """A helper functiion to creates a model and returns predicted logits.
 
     Args:
-      images: input images tensor.
       blocks_args:
       global_params: see params.py for details
       model_dir: optional directory to save the model
@@ -71,7 +70,6 @@ def build_model(images, blocks_args, global_params, training, model_dir=None):
       When model_name specified an undefined model, raises NotImplementedError.
       When override_params has invalid fields, raises ValueError.
     """
-    assert isinstance(images, tf.Tensor)
 
     if model_dir:
         param_file = os.path.join(model_dir, 'model_params.txt')
@@ -85,8 +83,5 @@ def build_model(images, blocks_args, global_params, training, model_dir=None):
 
     with tf.variable_scope("efficient-net"):
         model = EfficientNetModel(blocks_args, global_params)
-        # resolution is defined in the image tensor
-        logits = model(images, training=training)
 
-    logits = tf.identity(logits, 'logits')
-    return logits, model.endpoints
+    return model
