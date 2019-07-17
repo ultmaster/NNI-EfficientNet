@@ -137,8 +137,8 @@ def model_fn(features, labels, mode, params):
             mode=mode, loss=loss, eval_metric_ops=metrics)
     else:
         predictions = tf.argmax(logits, axis=1)
-        accuracy = tf.metrics.accuracy(labels, predictions, name="train_acc")
-        tf.summary.scalar("train_acc", accuracy[0])
+        train_acc = tf.reduce_mean(tf.cast(tf.equal(labels, tf.cast(predictions, tf.int32)), tf.float32), name="train_acc")
+        tf.summary.scalar("train_acc", train_acc)
 
     num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
     tf.logging.info('number of trainable parameters: {}'.format(num_params))
