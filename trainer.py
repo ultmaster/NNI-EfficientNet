@@ -123,25 +123,27 @@ def keras_train(dataset_train, dataset_eval, params):
     blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
     model = build_model(blocks_args, global_params)
     model.compile(loss="categorical_crossentropy",
-                  optimizer=tf.train.RMSPropOptimizer(0.256),
+                  optimizer=tf.train.RMSPropOptimizer(params["base_learning_rate"]),
                   metrics=["accuracy"])
 
     model.fit(dataset_train.make_one_shot_iterator(), epochs=5, steps_per_epoch=params["steps_per_epoch"])
 
 
 def _preprocess_func(image, label):
-    return (tf.image.resize(image, [224, 224]) / 255.), label
+    return (tf.image.resize_images(image, [224, 224]) / 255.), label
 
 
-def train_input_fn(features, labels, batch_size):
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+def train_input_fn(features, labels, batch_size, num_label_classes):
+    vectors = tf.one_hot(tf.reshape(labels, (-1, )), num_label_classes)
+    dataset = tf.data.Dataset.from_tensor_slices((features, vectors))
     dataset = dataset.map(_preprocess_func)
     dataset = dataset.shuffle(5).repeat().batch(batch_size)
     return dataset
 
 
-def eval_input_fn(features, labels, batch_size):
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+def eval_input_fn(features, labels, batch_size, num_label_classes):
+    vectors = tf.one_hot(tf.reshape(labels, (-1,)), num_label_classes)
+    dataset = tf.data.Dataset.from_tensor_slices((features, vectors))
     dataset = dataset.map(_preprocess_func)
     return dataset.batch(batch_size)
 
@@ -151,10 +153,10 @@ def main(args):
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     params = vars(args)
     tf.logging.info("Training on %d samples, evaluation on %d samples" % (x_train.shape[0], x_test.shape[0]))
-    params["steps_per_epoch"] = x_train.shape[0] / args.batch_size
+    params["steps_per_epoch"] = x_train.shape[0] // args.batch_size
 
-    keras_train(train_input_fn(x_train, y_train, args.batch_size),
-                eval_input_fn(x_train, y_train, args.batch_size), params)
+    keras_train(train_input_fn(x_train, y_train, args.batch_size, args.num_label_classes),
+                eval_input_fn(x_train, y_train, args.batch_size, args.num_label_classes), params)
 
     # classifier = tf.estimator.Estimator(model_fn=model_fn, params=params)
     # logging_hook = tf.train.LoggingTensorHook(tensors={"loss": "loss"}, every_n_iter=1)
