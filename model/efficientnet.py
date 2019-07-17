@@ -29,6 +29,9 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 from model import layers
 
 
+batchnorm = tf.layers.BatchNormalization
+
+
 def conv_kernel_initializer(shape, dtype=None, partition_info=None):
     """Initialization for convolutional kernels.
 
@@ -151,7 +154,7 @@ class MBConvBlock(object):
                 padding='same',
                 data_format=self._data_format,
                 use_bias=False)
-            self._bn0 = tf.layers.BatchNormalization(
+            self._bn0 = batchnorm(
                 axis=self._channel_axis,
                 momentum=self._batch_norm_momentum,
                 epsilon=self._batch_norm_epsilon)
@@ -165,7 +168,7 @@ class MBConvBlock(object):
             padding='same',
             data_format=self._data_format,
             use_bias=False)
-        self._bn1 = tf.layers.BatchNormalization(
+        self._bn1 = batchnorm(
             axis=self._channel_axis,
             momentum=self._batch_norm_momentum,
             epsilon=self._batch_norm_epsilon)
@@ -201,7 +204,7 @@ class MBConvBlock(object):
             padding='same',
             data_format=self._data_format,
             use_bias=False)
-        self._bn2 = tf.layers.BatchNormalization(
+        self._bn2 = batchnorm(
             axis=self._channel_axis,
             momentum=self._batch_norm_momentum,
             epsilon=self._batch_norm_epsilon)
@@ -335,7 +338,7 @@ class EfficientNetModel(tf.keras.Model):
             padding='same',
             data_format=self._global_params.data_format,
             use_bias=False)
-        self._bn0 = tf.layers.BatchNormalization(
+        self._bn0 = batchnorm(
             axis=channel_axis,
             momentum=batch_norm_momentum,
             epsilon=batch_norm_epsilon)
@@ -348,7 +351,7 @@ class EfficientNetModel(tf.keras.Model):
             kernel_initializer=conv_kernel_initializer,
             padding='same',
             use_bias=False)
-        self._bn1 = tf.layers.BatchNormalization(
+        self._bn1 = batchnorm(
             axis=channel_axis,
             momentum=batch_norm_momentum,
             epsilon=batch_norm_epsilon)

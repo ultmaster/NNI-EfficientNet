@@ -2,8 +2,7 @@ import tensorflow as tf
 import numpy as np
 from argparse import ArgumentParser
 
-from tensorflow.python.keras.datasets import cifar100, cifar10
-
+from datasets import cifar10
 from model import get_model_params, build_model
 
 
@@ -77,25 +76,50 @@ def get_ema_vars():
 def model_fn(features, labels, mode, params):
     blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
     model = build_model(blocks_args, global_params)
-    logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
-    logits = tf.identity(logits, 'logits')
+
+    if params["data_format"] == "channels_first":
+        features = tf.transpose(features, [0, 3, 1, 2])
+
+    with tf.variable_scope("efficient-net-logits"):
+        logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
+        logits = tf.identity(logits, 'logits')
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {
+            'classes': tf.argmax(logits, axis=1),
+            'probabilities': tf.nn.softmax(logits, name='softmax_tensor')
+        }
+        return tf.estimator.EstimatorSpec(
+            mode=mode,
+            predictions=predictions,
+            export_outputs={
+                'classify': tf.estimator.export.PredictOutput(predictions)
+            })
 
     # Calculate loss, which includes softmax cross entropy and L2 regularization.
     one_hot_labels = tf.one_hot(tf.reshape(labels, (-1, )), params["num_label_classes"])
     cross_entropy = tf.losses.softmax_cross_entropy(
-        logits=logits,
-        onehot_labels=one_hot_labels,
+        logits=logits, onehot_labels=one_hot_labels,
         label_smoothing=params["label_smoothing"])
 
     # Add weight decay to the loss for non-batch-normalization variables.
-    loss = cross_entropy + params["weight_decay"] * tf.add_n(
-        [tf.nn.l2_loss(v) for v in tf.trainable_variables()
-         if 'batch_normalization' not in v.name])
-    loss = tf.identity(loss, "loss")
+    loss = cross_entropy
+    if params["weight_decay"]:
+        loss += params["weight_decay"] * tf.add_n(
+            [tf.nn.l2_loss(v) for v in tf.trainable_variables()
+             if 'batch_normalization' not in v.name])
+    loss = tf.identity(loss, "train_loss")
+    tf.summary.scalar("train_loss", loss)
 
-    optimizer = tf.train.RMSPropOptimizer(0.256)
+    global_step = tf.train.get_global_step()
+    steps_per_epoch = params["steps_per_epoch"]
+    scaled_lr = params["base_learning_rate"] * (params["batch_size"] / 256.0)
+    learning_rate = build_learning_rate(scaled_lr, global_step, steps_per_epoch)
+    optimizer = build_optimizer(learning_rate)
 
-    train_op = optimizer.minimize(loss)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        train_op = optimizer.minimize(loss, global_step)
 
     if mode == tf.estimator.ModeKeys.EVAL:
         predictions = tf.argmax(logits, axis=1)
@@ -111,64 +135,63 @@ def model_fn(features, labels, mode, params):
 
         return tf.estimator.EstimatorSpec(
             mode=mode, loss=loss, eval_metric_ops=metrics)
+    else:
+        predictions = tf.argmax(logits, axis=1)
+        accuracy = tf.metrics.accuracy(labels, predictions, name="train_acc")
+        tf.summary.scalar("train_acc", accuracy[0])
 
     num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
     tf.logging.info('number of trainable parameters: {}'.format(num_params))
 
-    return tf.estimator.EstimatorSpec(
-        mode=mode, loss=loss, train_op=train_op)
-
-
-def keras_train(dataset_train, dataset_eval, params):
-    blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
-    model = build_model(blocks_args, global_params)
-    model.compile(loss="categorical_crossentropy",
-                  optimizer=tf.train.RMSPropOptimizer(params["base_learning_rate"]),
-                  metrics=["accuracy"])
-
-    model.fit(dataset_train.make_one_shot_iterator(), epochs=5, steps_per_epoch=params["steps_per_epoch"])
+    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
 
 def _preprocess_func(image, label):
-    return (tf.image.resize_images(image, [224, 224]) / 255.), label
+    return tf.image.resize_images(image, [224, 224]), label
 
 
-def train_input_fn(features, labels, batch_size, num_label_classes):
-    vectors = tf.one_hot(tf.reshape(labels, (-1, )), num_label_classes)
-    dataset = tf.data.Dataset.from_tensor_slices((features, vectors))
+def train_input_fn(features, labels, batch_size):
+    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
     dataset = dataset.map(_preprocess_func)
     dataset = dataset.shuffle(5).repeat().batch(batch_size)
     return dataset
 
 
-def eval_input_fn(features, labels, batch_size, num_label_classes):
-    vectors = tf.one_hot(tf.reshape(labels, (-1,)), num_label_classes)
-    dataset = tf.data.Dataset.from_tensor_slices((features, vectors))
+def eval_input_fn(features, labels, batch_size):
+    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
     dataset = dataset.map(_preprocess_func)
     return dataset.batch(batch_size)
 
 
 def main(args):
     tf.logging.set_verbosity(tf.logging.INFO)
-    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+    if args.dataset == "cifar10":
+        cifar_prepare, dataset_gen = cifar10(True), cifar10(False)
+        len_train, len_test = cifar_prepare("train"), cifar_prepare("test")
+    else:
+        raise NotImplementedError
+
     params = vars(args)
-    tf.logging.info("Training on %d samples, evaluation on %d samples" % (x_train.shape[0], x_test.shape[0]))
-    params["steps_per_epoch"] = x_train.shape[0] // args.batch_size
+    tf.logging.info("Training on %d samples, evaluation on %d samples" % (len_train, len_test))
+    params["steps_per_epoch"] = len_train // args.batch_size
 
-    keras_train(train_input_fn(x_train, y_train, args.batch_size, args.num_label_classes),
-                eval_input_fn(x_train, y_train, args.batch_size, args.num_label_classes), params)
+    run_config = tf.estimator.RunConfig(model_dir=args.log_dir)
+    classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
+    logging_hook = tf.train.LoggingTensorHook(tensors={"train_loss": "train_loss",
+                                                       "train_acc": "train_acc"}, every_n_iter=1)
 
-    # classifier = tf.estimator.Estimator(model_fn=model_fn, params=params)
-    # logging_hook = tf.train.LoggingTensorHook(tensors={"loss": "loss"}, every_n_iter=1)
-    # train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(x_train, y_train, args.batch_size),
-    #                                     hooks=[logging_hook])
-    # eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(x_test, y_test, args.batch_size))
-    #
-    # tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
+    train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
+                                        hooks=[logging_hook])
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size))
+
+    tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
+    parser.add_argument("--dataset", default="cifar10", choices=["cifar10"], type=str)
+    parser.add_argument("--log-dir", default="logs", type=str)
     parser.add_argument("--base-learning-rate", default=0.256, type=float,
                         help='Base learning rate when train batch size is 256.')
     parser.add_argument("--batch-size", default=256, type=int)
@@ -179,4 +202,6 @@ if __name__ == "__main__":
     parser.add_argument("--moving-average-decay", default=1 - 1e-4, type=float,
                         help='Moving average decay rate')
     parser.add_argument("--num-label-classes", default=1000, type=int)
+    parser.add_argument("--data-format", choices=["channels_first", "channels_last"], default="channels_last",
+                        help="Prefer channels first on GPU, otherwise choose channels last")
     main(parser.parse_args())

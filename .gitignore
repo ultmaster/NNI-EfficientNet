@@ -114,7 +114,7 @@ logs/
 *.swp
 
 # data
-datasets/data
+data/datasets
 datasets/extras
 summary
 checkpoints
