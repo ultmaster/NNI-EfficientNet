@@ -15,7 +15,7 @@ STDDEV_RGB = [0.229, 0.224, 0.225]
 def load_and_preprocess_image(path):
     image = tf.read_file(path)
     image = tf.image.decode_jpeg(image, channels=3)
-    image = tf.image.resize(image, [224, 224])
+    image = tf.image.resize_images(image, [224, 224])
     image /= 255.0  # normalize to [0,1] range
 
     image -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=image.dtype)
