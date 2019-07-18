@@ -156,7 +156,7 @@ def main(args):
     image_size = [args.resolution, args.resolution]
     if args.dataset == "cifar10":
         cifar_prepare, dataset_gen = cifar10(True), cifar10(False)
-        train_meta, test_meta = cifar_prepare("train", image_size), cifar_prepare("test", image_size)
+        train_meta, test_meta = cifar_prepare("train"), cifar_prepare("test")
     else:
         raise NotImplementedError
 
@@ -176,9 +176,11 @@ def main(args):
                                         save_checkpoints_secs=args.evaluation_interval,
                                         save_summary_steps=10)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
-    train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
+    train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", image_size,
+                                                                     True, args.batch_size),
                                         max_steps=max_steps)
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size),
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", image_size,
+                                                                   False, args.batch_size),
                                       exporters=exporters)
 
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
