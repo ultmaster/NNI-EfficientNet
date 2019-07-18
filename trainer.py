@@ -110,7 +110,6 @@ def model_fn(features, labels, mode, params):
             [tf.nn.l2_loss(v) for v in tf.trainable_variables()
              if 'batch_normalization' not in v.name])
     loss = tf.identity(loss, "train_loss")
-    tf.summary.scalar("train_loss", loss)
 
     global_step = tf.train.get_global_step()
     steps_per_epoch = params["steps_per_epoch"]
@@ -122,10 +121,10 @@ def model_fn(features, labels, mode, params):
     with tf.control_dependencies(update_ops):
         train_op = optimizer.minimize(loss, global_step)
 
-    if mode == tf.estimator.ModeKeys.EVAL:
-        predictions = tf.argmax(logits, axis=1)
-        top_1_accuracy = tf.metrics.accuracy(labels, predictions)
+    predictions = tf.argmax(logits, axis=1)
+    top_1_accuracy = tf.metrics.accuracy(labels, predictions)
 
+    if mode == tf.estimator.ModeKeys.EVAL:
         in_top_5 = tf.cast(tf.nn.in_top_k(logits, labels, 5), tf.float32)
         top_5_accuracy = tf.metrics.mean(in_top_5)
 
@@ -137,10 +136,7 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(
             mode=mode, loss=loss, eval_metric_ops=metrics)
     else:
-        predictions = tf.argmax(logits, axis=1)
-        train_acc = tf.reduce_mean(tf.cast(tf.equal(labels, tf.cast(predictions, tf.int32)), tf.float32),
-                                   name="train_acc")
-        tf.summary.scalar("train_acc", train_acc)
+        tf.summary.scalar("train_acc", top_1_accuracy[1])
 
     num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
     tf.logging.info('number of trainable parameters: {}'.format(num_params))
@@ -183,12 +179,11 @@ def main(args):
 
     nni_exporter = NNIExporter()
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
-                                        save_checkpoints_secs=60)
+                                        save_checkpoints_secs=60,
+                                        save_summary_steps=10)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
-    logging_hook = tf.train.LoggingTensorHook(tensors={"train_loss": "train_loss",
-                                                       "train_acc": "train_acc"}, every_n_iter=10)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
-                                        hooks=[logging_hook], max_steps=max_steps)
+                                        max_steps=max_steps)
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size),
                                       exporters=[nni_exporter])
 
