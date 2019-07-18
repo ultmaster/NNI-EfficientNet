@@ -137,7 +137,8 @@ def model_fn(features, labels, mode, params):
             mode=mode, loss=loss, eval_metric_ops=metrics)
     else:
         predictions = tf.argmax(logits, axis=1)
-        train_acc = tf.reduce_mean(tf.cast(tf.equal(labels, tf.cast(predictions, tf.int32)), tf.float32), name="train_acc")
+        train_acc = tf.reduce_mean(tf.cast(tf.equal(labels, tf.cast(predictions, tf.int32)), tf.float32),
+                                   name="train_acc")
         tf.summary.scalar("train_acc", train_acc)
 
     num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
@@ -168,13 +169,15 @@ def main(args):
 
     if args.dataset == "cifar10":
         cifar_prepare, dataset_gen = cifar10(True), cifar10(False)
-        len_train, len_test = cifar_prepare("train"), cifar_prepare("test")
+        train_meta, test_meta = cifar_prepare("train"), cifar_prepare("test")
     else:
         raise NotImplementedError
 
     params = vars(args)
-    tf.logging.info("Training on %d samples, evaluation on %d samples" % (len_train, len_test))
-    params["steps_per_epoch"] = len_train // args.batch_size
+    tf.logging.info("Training on %d samples, evaluation on %d samples" % (train_meta["length"],
+                                                                          test_meta["length"]))
+    params["steps_per_epoch"] = train_meta["length"] // args.batch_size
+    params["num_label_classes"] = train_meta["num_classes"]
 
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
@@ -201,7 +204,6 @@ if __name__ == "__main__":
                         help='Label smoothing parameter used in the softmax_cross_entropy')
     parser.add_argument("--moving-average-decay", default=1 - 1e-4, type=float,
                         help='Moving average decay rate')
-    parser.add_argument("--num-label-classes", default=1000, type=int)
     parser.add_argument("--data-format", choices=["channels_first", "channels_last"], default="channels_last",
                         help="Prefer channels first on GPU, otherwise choose channels last")
     main(parser.parse_args())

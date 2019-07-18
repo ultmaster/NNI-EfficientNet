@@ -23,15 +23,19 @@ def load_and_preprocess_image(path):
     return image
 
 
-def cifar10(return_size=False):
+def cifar10(meta=False):
+    # wget http://pjreddie.com/media/files/cifar.tgz, extract to data/datasets/cifar10
     def prepare_cifar(subset, shuffle=False, batch_size=1):
         folder = os.path.join(rt_path, subset)
         files = list(filter(is_image, os.listdir(folder)))
         labels = [label_id_map[file[file.index("_") + 1:file.index(".")]] for file in files]
         paths = [os.path.join(folder, file) for file in files]
         assert len(paths) == len(labels)
-        if return_size:
-            return len(paths)
+        if meta:
+            return {
+                "length": len(paths),
+                "num_classes": len(label_id_map)
+            }
 
         ds = tf.data.Dataset.from_tensor_slices((paths, labels))
 
