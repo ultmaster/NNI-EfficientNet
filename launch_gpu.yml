@@ -16,3 +16,5 @@ trial:
   codeDir: .
   command: python trainer.py --batch-size 32 --request-from-nni
   gpuNum: 4
+localConfig:
+  useActiveGpu: true
