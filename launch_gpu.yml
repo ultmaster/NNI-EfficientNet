@@ -1,6 +1,6 @@
 authorName: v-yugzh
 experimentName: example_efficient_net
-trialConcurrency: 1
+trialConcurrency: 4
 maxExecDuration: 1h
 maxTrialNum: 20
 trainingServicePlatform: local

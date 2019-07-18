@@ -118,6 +118,12 @@ def model_fn(features, labels, mode, params):
     loss = tf.identity(loss, "train_loss")
 
     global_step = tf.train.get_global_step()
+
+    if params["moving_average_decay"] > 0:
+        ema = tf.train.ExponentialMovingAverage(
+            decay=params["moving_average_decay"], num_updates=global_step)
+        ema_vars = get_ema_vars()
+
     steps_per_epoch = params["steps_per_epoch"]
     scaled_lr = params["base_learning_rate"] * (params["batch_size"] / 256.0)
     learning_rate = build_learning_rate(scaled_lr, global_step, steps_per_epoch)
@@ -126,6 +132,9 @@ def model_fn(features, labels, mode, params):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
         train_op = optimizer.minimize(loss, global_step)
+    if params["moving_average_decay"] > 0:
+        with tf.control_dependencies([train_op]):
+            train_op = ema.apply(ema_vars)
 
     predictions = tf.argmax(logits, axis=1)
     top_1_accuracy = tf.metrics.accuracy(labels, predictions)
@@ -172,10 +181,11 @@ def main(args):
     else:
         exporters = []
 
-    if os.environ.get("CUDA_VISIBLE_DEVICES"):
-        strategy = tf.contrib.distribute.MirroredStrategy()
-    else:
-        strategy = None
+    # TODO: add multi-gpu support
+    # if os.environ.get("CUDA_VISIBLE_DEVICES"):
+    #     strategy = tf.contrib.distribute.MirroredStrategy()
+    # else:
+    strategy = None
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
                                         log_step_count_steps=10,
                                         save_checkpoints_secs=args.evaluation_interval,
