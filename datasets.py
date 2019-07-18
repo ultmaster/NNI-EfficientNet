@@ -25,7 +25,7 @@ def load_and_preprocess_image(path):
 
 def cifar10(meta=False):
     # wget http://pjreddie.com/media/files/cifar.tgz, extract to data/datasets/cifar10
-    def prepare_cifar(subset, shuffle=False, batch_size=1):
+    def prepare_cifar(subset, training=False, batch_size=1):
         folder = os.path.join(rt_path, subset)
         files = list(filter(is_image, os.listdir(folder)))
         labels = [label_id_map[file[file.index("_") + 1:file.index(".")]] for file in files]
@@ -43,8 +43,8 @@ def cifar10(meta=False):
             return load_and_preprocess_image(path), label
 
         ds = ds.map(load_and_preprocess_from_path_label)
-        if shuffle:
-            ds = ds.shuffle(8)
+        if training:
+            ds = ds.shuffle(8).repeat()
         return ds.batch(batch_size)
 
     rt_path = config.DATASETS_PATH["cifar10"]

@@ -177,6 +177,7 @@ def main(args):
     tf.logging.info("Training on %d samples, evaluation on %d samples" % (train_meta["length"],
                                                                           test_meta["length"]))
     params["steps_per_epoch"] = train_meta["length"] // args.batch_size
+    max_steps = args.num_epochs * params["steps_per_epoch"]
     params["num_label_classes"] = train_meta["num_classes"]
 
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir)
@@ -185,8 +186,9 @@ def main(args):
                                                        "train_acc": "train_acc"}, every_n_iter=1)
 
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
-                                        hooks=[logging_hook])
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size))
+                                        hooks=[logging_hook], max_steps=max_steps)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size),
+                                      steps=100)
 
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
@@ -206,4 +208,5 @@ if __name__ == "__main__":
                         help='Moving average decay rate')
     parser.add_argument("--data-format", choices=["channels_first", "channels_last"], default="channels_last",
                         help="Prefer channels first on GPU, otherwise choose channels last")
+    parser.add_argument("--num-epochs", default=5, type=int, help="Number of epochs in total")
     main(parser.parse_args())
