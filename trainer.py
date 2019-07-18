@@ -1,3 +1,7 @@
+import logging
+import os
+from datetime import datetime
+
 import tensorflow as tf
 import numpy as np
 from argparse import ArgumentParser
@@ -75,7 +79,9 @@ def get_ema_vars():
 
 
 def model_fn(features, labels, mode, params):
-    blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"])
+    blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"],
+                                                  width_coefficient=params["width_coefficient"],
+                                                  depth_coefficient=params["depth_coefficient"])
     model = build_model(blocks_args, global_params)
 
     if params["data_format"] == "channels_first":
@@ -144,29 +150,13 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
 
-def _preprocess_func(image, label):
-    return tf.image.resize_images(image, [224, 224]), label
-
-
-def train_input_fn(features, labels, batch_size):
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-    dataset = dataset.map(_preprocess_func)
-    dataset = dataset.shuffle(5).repeat().batch(batch_size)
-    return dataset
-
-
-def eval_input_fn(features, labels, batch_size):
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-    dataset = dataset.map(_preprocess_func)
-    return dataset.batch(batch_size)
-
-
 def main(args):
     tf.logging.set_verbosity(tf.logging.INFO)
 
+    image_size = [args.resolution, args.resolution]
     if args.dataset == "cifar10":
         cifar_prepare, dataset_gen = cifar10(True), cifar10(False)
-        train_meta, test_meta = cifar_prepare("train"), cifar_prepare("test")
+        train_meta, test_meta = cifar_prepare("train", image_size), cifar_prepare("test", image_size)
     else:
         raise NotImplementedError
 
@@ -179,7 +169,8 @@ def main(args):
 
     nni_exporter = NNIExporter()
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
-                                        save_checkpoints_secs=60,
+                                        log_step_count_steps=10,
+                                        save_checkpoints_secs=args.evaluation_interval,
                                         save_summary_steps=10)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
@@ -191,7 +182,12 @@ def main(args):
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger('efficientnet')
+
     parser = ArgumentParser()
+    parser.add_argument("--depth-coefficient", default=1.0, type=float)
+    parser.add_argument("--width-coefficient", default=1.0, type=float)
+    parser.add_argument("--resolution", default=224, type=int)
     parser.add_argument("--dataset", default="cifar10", choices=["cifar10"], type=str)
     parser.add_argument("--log-dir", default="logs", type=str)
     parser.add_argument("--base-learning-rate", default=0.256, type=float,
@@ -206,4 +202,26 @@ if __name__ == "__main__":
     parser.add_argument("--data-format", choices=["channels_first", "channels_last"], default="channels_last",
                         help="Prefer channels first on GPU, otherwise choose channels last")
     parser.add_argument("--num-epochs", default=5, type=int, help="Number of epochs in total")
-    main(parser.parse_args())
+    parser.add_argument("--evaluation-interval", default=180, type=int,
+                        help="Frequency of evaluation (and report to NNI)")
+    parser.add_argument("--request-from-nni", default=False, action="store_true")
+
+    args = parser.parse_args()
+    if args.request_from_nni:
+        import nni
+        tuner_params = nni.get_next_parameter()
+        tf.logging.info(tuner_params)
+
+        parser.depth_coefficient = tuner_params["alpha"]
+        parser.width_coefficient = tuner_params["beta"]
+        parser.resolution = int(tuner_params["gamma"] * 224)
+
+        # create a new directory every time in case of nni run
+        args.log_dir = os.path.join(args.log_dir, datetime.now().strftime('%m%d%H%M%S'))
+        tf.logging.info(args)
+
+    try:
+        main(args)
+    except Exception as exception:
+        tf.logging.error(exception)
+        raise
