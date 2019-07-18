@@ -14,7 +14,7 @@ tuner:
     product: 2
 trial:
   codeDir: .
-  command: python trainer.py --batch-size 32 --request-from-nni
-  gpuNum: 4
+  command: python trainer.py --batch-size 24 --request-from-nni
+  gpuNum: 1
 localConfig:
   useActiveGpu: true
