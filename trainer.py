@@ -3,6 +3,7 @@ import numpy as np
 from argparse import ArgumentParser
 
 from datasets import cifar10
+from exporter import NNIExporter
 from model import get_model_params, build_model
 
 
@@ -180,15 +181,16 @@ def main(args):
     max_steps = args.num_epochs * params["steps_per_epoch"]
     params["num_label_classes"] = train_meta["num_classes"]
 
-    run_config = tf.estimator.RunConfig(model_dir=args.log_dir)
+    nni_exporter = NNIExporter()
+    run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
+                                        save_checkpoints_secs=60)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
     logging_hook = tf.train.LoggingTensorHook(tensors={"train_loss": "train_loss",
-                                                       "train_acc": "train_acc"}, every_n_iter=1)
-
+                                                       "train_acc": "train_acc"}, every_n_iter=10)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
                                         hooks=[logging_hook], max_steps=max_steps)
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size),
-                                      steps=100)
+                                      exporters=[nni_exporter])
 
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
