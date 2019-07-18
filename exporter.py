@@ -7,3 +7,7 @@ class NNIExporter(tf.estimator.Exporter):
         print(eval_result)
         print(export_path)
         print(checkpoint_path)
+
+    @property
+    def name(self):
+        return "nni_exporter"
