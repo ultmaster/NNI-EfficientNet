@@ -219,8 +219,7 @@ if __name__ == "__main__":
         parser.width_coefficient = tuner_params["beta"]
         parser.resolution = int(tuner_params["gamma"] * 224)
 
-        # create a new directory every time in case of nni run
-        args.log_dir = os.path.join(args.log_dir, datetime.now().strftime('%m%d%H%M%S'))
+        args.log_dir = os.environ["NNI_OUTPUT_DIR"]
         tf.logging.info(args)
 
     try:
