@@ -173,7 +173,7 @@ def main(args):
         exporters = []
 
     if os.environ.get("CUDA_VISIBLE_DEVICES"):
-        strategy = tf.distribute.MirroredStrategy()
+        strategy = tf.contrib.distribute.MirroredStrategy()
     else:
         strategy = None
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
