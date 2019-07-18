@@ -167,7 +167,10 @@ def main(args):
     max_steps = args.num_epochs * params["steps_per_epoch"]
     params["num_label_classes"] = train_meta["num_classes"]
 
-    nni_exporter = NNIExporter()
+    if args.request_from_nni:
+        exporters = [NNIExporter()]
+    else:
+        exporters = []
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
                                         log_step_count_steps=10,
                                         save_checkpoints_secs=args.evaluation_interval,
@@ -176,7 +179,7 @@ def main(args):
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", True, args.batch_size),
                                         max_steps=max_steps)
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", False, args.batch_size),
-                                      exporters=[nni_exporter])
+                                      exporters=exporters)
 
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
