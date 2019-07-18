@@ -181,6 +181,7 @@ def main(args):
                                         max_steps=max_steps)
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: dataset_gen("test", image_size,
                                                                    False, args.batch_size),
+                                      throttle_secs=args.evaluation_interval,
                                       exporters=exporters)
 
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
