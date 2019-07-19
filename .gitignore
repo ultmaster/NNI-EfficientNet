@@ -119,6 +119,7 @@ datasets/extras
 summary
 checkpoints
 pretrained
+pai.yml
 
 # IDEA
 .idea
