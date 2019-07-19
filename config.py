@@ -4,3 +4,7 @@ EFFICIENT_NET_PRETRAINED_PATH = "data/efficientnet_all.json"
 DATASETS_PATH = {
     "cifar10": "data/datasets/cifar10"
 }
+
+DATASETS_COMPRESSED_PATH = {
+    "cifar10": "data/datasets/cifar10.tar.gz"
+}

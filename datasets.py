@@ -1,4 +1,6 @@
 import os
+import tarfile
+
 import tensorflow as tf
 
 import config
@@ -48,6 +50,11 @@ def cifar10(meta=False):
         return ds.batch(batch_size)
 
     rt_path = config.DATASETS_PATH["cifar10"]
+    if not os.path.exists(rt_path):
+        tar_path = config.DATASETS_COMPRESSED_PATH["cifar10"]
+        assert os.path.exists(tar_path)
+        with tarfile.open(tar_path) as tar:
+            tar.extractall(path=os.path.dirname(rt_path))
     with open(os.path.join(rt_path, "labels.txt")) as f:
         label_id_map = {word.strip(): i for i, word in enumerate(f.readlines())}
 
