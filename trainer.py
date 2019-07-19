@@ -181,17 +181,10 @@ def main(args):
     else:
         exporters = []
 
-    # TODO: add multi-gpu support
-    # if os.environ.get("CUDA_VISIBLE_DEVICES"):
-    #     strategy = tf.contrib.distribute.MirroredStrategy()
-    # else:
-    strategy = None
     run_config = tf.estimator.RunConfig(model_dir=args.log_dir,
                                         log_step_count_steps=10,
                                         save_checkpoints_secs=args.evaluation_interval,
-                                        save_summary_steps=10,
-                                        train_distribute=strategy,
-                                        eval_distribute=strategy)
+                                        save_summary_steps=10)
     classifier = tf.estimator.Estimator(model_fn=model_fn, params=params, config=run_config)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: dataset_gen("train", image_size,
                                                                      True, args.batch_size),
