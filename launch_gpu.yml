@@ -14,5 +14,5 @@ tuner:
     product: 2
 trial:
   codeDir: .
-  command: python trainer.py --batch-size 24 --request-from-nni
+  command: python trainer.py --batch-size 24 --request-from-nni --num-epochs 1
   gpuNum: 1

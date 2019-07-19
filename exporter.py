@@ -7,7 +7,7 @@ class NNIExporter(tf.estimator.Exporter):
         import nni
         result = eval_result["top_1_accuracy"]
         if is_the_final_export:
-            nni.report_intermediate_result(result)
+            nni.report_final_result(result)
         else:
             nni.report_intermediate_result(result)
 

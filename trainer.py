@@ -218,7 +218,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-format", choices=["channels_first", "channels_last"], default="channels_last",
                         help="Prefer channels first on GPU, otherwise choose channels last")
     parser.add_argument("--num-epochs", default=5, type=int, help="Number of epochs in total")
-    parser.add_argument("--evaluation-interval", default=180, type=int,
+    parser.add_argument("--evaluation-interval", default=360, type=int,
                         help="Frequency of evaluation (and report to NNI)")
     parser.add_argument("--request-from-nni", default=False, action="store_true")
 
