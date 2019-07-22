@@ -4,8 +4,8 @@ import os
 import tensorflow as tf
 
 import config
+from model import efficientnet
 from model.block_decoder import BlockDecoder
-from model.efficientnet import EfficientNetModel
 from model.params import GlobalParams
 
 
@@ -83,6 +83,4 @@ def build_model(blocks_args, global_params, model_dir=None):
                 f.write('global_params = %s\n\n' % str(global_params))
                 f.write('blocks_args = %s\n\n' % str(blocks_args))
 
-    model = EfficientNetModel(blocks_args, global_params)
-
-    return model
+    return efficientnet.Model(blocks_args, global_params)

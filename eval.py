@@ -103,10 +103,14 @@ class EvalCkptDriver(object):
         """Build model with input features."""
         features -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=features.dtype)
         features /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=features.dtype)
-        model = build_model(self.block_args, self.global_params)
-        with tf.variable_scope("efficient-net"):
+
+        # logits, _ = efficientnet_builder.build_model(features, self.model_name, is_training)
+
+        with tf.variable_scope(self.model_name):
+            model = build_model(self.block_args, self.global_params)
             logits = model(features, training=is_training)
         logits = tf.identity(logits, 'logits')
+
         probs = tf.nn.softmax(logits)
         probs = tf.squeeze(probs)
         return probs

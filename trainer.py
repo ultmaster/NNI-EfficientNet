@@ -100,16 +100,15 @@ def model_fn(features, labels, mode, params):
                                                   depth_coefficient=params["depth_coefficient"])
 
     with tf.Session() as sess:
-        model = build_model(blocks_args, global_params)
-
         if params["data_format"] == "channels_first":
             features = tf.transpose(features, [0, 3, 1, 2])
-
-        with tf.variable_scope("efficient-net"):
+        with tf.variable_scope(params["model_name"]):
+            model = build_model(blocks_args, global_params)
             logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
         logits = tf.identity(logits, 'logits')
 
-        restore_model(sess, params["ckpt_dir"])
+        if params["ckpt_dir"]:
+            restore_model(sess, params["ckpt_dir"])
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
@@ -221,6 +220,7 @@ if __name__ == "__main__":
     logger = logging.getLogger('efficientnet')
 
     parser = ArgumentParser()
+    parser.add_argument("--model-name", default="efficientnet-b0", type=str)
     parser.add_argument("--depth-coefficient", default=1.0, type=float)
     parser.add_argument("--width-coefficient", default=1.0, type=float)
     parser.add_argument("--resolution", default=224, type=int)

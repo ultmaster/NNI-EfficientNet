@@ -27,9 +27,11 @@ import tensorflow as tf
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
 from model import layers
+from model.layers import TpuBatchNormalization
 
 
-batchnorm = tf.layers.BatchNormalization
+# batchnorm = tf.layers.BatchNormalization
+batchnorm = TpuBatchNormalization
 
 
 def conv_kernel_initializer(shape, dtype=None, partition_info=None):
@@ -264,7 +266,7 @@ class MBConvBlock(object):
         return x
 
 
-class EfficientNetModel(tf.keras.Model):
+class Model(tf.keras.Model):
     """A class implements tf.keras.Model for MNAS-like model.
 
       Reference: https://arxiv.org/abs/1807.11626
@@ -280,7 +282,7 @@ class EfficientNetModel(tf.keras.Model):
         Raises:
           ValueError: when blocks_args is not specified as a list.
         """
-        super(EfficientNetModel, self).__init__()
+        super(Model, self).__init__()
         if not isinstance(blocks_args, list):
             raise ValueError('blocks_args should be a list.')
         self._global_params = global_params
@@ -423,5 +425,6 @@ class EfficientNetModel(tf.keras.Model):
                     outputs = self._dropout(outputs, training=training)
                 self.endpoints['global_pool'] = outputs
                 outputs = self._fc(outputs)
+                tf.logging.info('output shape: %s' % outputs.shape)
                 self.endpoints['head'] = outputs
         return outputs
