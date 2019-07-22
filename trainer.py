@@ -228,9 +228,12 @@ if __name__ == "__main__":
         tuner_params = nni.get_next_parameter()
         tf.logging.info(tuner_params)
 
-        parser.depth_coefficient = tuner_params["alpha"]
-        parser.width_coefficient = tuner_params["beta"]
-        parser.resolution = int(tuner_params["gamma"] * 224)
+        if "alpha" in tuner_params:
+            parser.depth_coefficient = tuner_params["alpha"]
+            parser.width_coefficient = tuner_params["beta"]
+            parser.resolution = int(tuner_params["gamma"] * 224)
+        if "lr" in tuner_params:
+            parser.base_learning_rate = tuner_params["lr"]
 
         args.log_dir = os.environ["NNI_OUTPUT_DIR"]
         tf.logging.info(args)
