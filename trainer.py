@@ -99,16 +99,15 @@ def model_fn(features, labels, mode, params):
                                                   width_coefficient=params["width_coefficient"],
                                                   depth_coefficient=params["depth_coefficient"])
 
-    with tf.Session() as sess:
-        if params["data_format"] == "channels_first":
-            features = tf.transpose(features, [0, 3, 1, 2])
-        with tf.variable_scope(params["model_name"]):
-            model = build_model(blocks_args, global_params)
-            logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
-        logits = tf.identity(logits, 'logits')
+    if params["data_format"] == "channels_first":
+        features = tf.transpose(features, [0, 3, 1, 2])
+    with tf.variable_scope(params["model_name"]):
+        model = build_model(blocks_args, global_params)
+        logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
+    logits = tf.identity(logits, 'logits')
 
-        if params["ckpt_dir"]:
-            restore_model(sess, params["ckpt_dir"])
+    if params["ckpt_dir"]:
+        model.load_weights(os.path.join(params["ckpt_dir"], "model.ckpt"))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
