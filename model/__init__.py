@@ -11,6 +11,7 @@ from model.params import GlobalParams
 
 def get_model_params(width_coefficient=None,
                      depth_coefficient=None,
+                     image_size=None,
                      dropout_rate=0.2,
                      drop_connect_rate=0.2,
                      num_classes=1000):
@@ -26,6 +27,7 @@ def get_model_params(width_coefficient=None,
         num_classes=num_classes,
         width_coefficient=width_coefficient,
         depth_coefficient=depth_coefficient,
+        image_size=image_size,
         depth_divisor=8,
         min_depth=None,
         relu_fn=tf.nn.swish)
@@ -33,14 +35,14 @@ def get_model_params(width_coefficient=None,
     return decoder.decode(blocks_args), global_params
 
 
-def get_pretrained_model_params(model_name, override_params):
+def get_pretrained_model_params(model_name, override_params=None):
     """Get the block args and global params for a given model."""
     if model_name.startswith('efficientnet'):
         with open(config.EFFICIENT_NET_PRETRAINED_PATH, "r") as f:
             params_dict = json.load(f)
-        width_coefficient, depth_coefficient, _, dropout_rate = params_dict[model_name]
+        width_coefficient, depth_coefficient, image_size, dropout_rate = params_dict[model_name]
         blocks_args, global_params = get_model_params(
-            width_coefficient, depth_coefficient, dropout_rate)
+            width_coefficient, depth_coefficient, image_size, dropout_rate)
     else:
         raise NotImplementedError('model name is not pre-defined: %s' % model_name)
 
@@ -81,7 +83,6 @@ def build_model(blocks_args, global_params, model_dir=None):
                 f.write('global_params = %s\n\n' % str(global_params))
                 f.write('blocks_args = %s\n\n' % str(blocks_args))
 
-    with tf.variable_scope("efficient-net"):
-        model = EfficientNetModel(blocks_args, global_params)
+    model = EfficientNetModel(blocks_args, global_params)
 
     return model

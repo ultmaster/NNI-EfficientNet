@@ -78,18 +78,38 @@ def get_ema_vars():
     return list(set(ema_vars))
 
 
+def restore_model(sess, ckpt_dir, enable_ema=True):
+    """Restore variables from checkpoint dir."""
+    sess.run(tf.global_variables_initializer())
+    checkpoint = tf.train.latest_checkpoint(ckpt_dir)
+    if enable_ema:
+        ema = tf.train.ExponentialMovingAverage(decay=0.0)
+        ema_vars = get_ema_vars()
+        var_dict = ema.variables_to_restore(ema_vars)
+    else:
+        var_dict = None
+
+    sess.run(tf.global_variables_initializer())
+    saver = tf.train.Saver(var_dict, max_to_keep=1)
+    saver.restore(sess, checkpoint)
+
+
 def model_fn(features, labels, mode, params):
     blocks_args, global_params = get_model_params(num_classes=params["num_label_classes"],
                                                   width_coefficient=params["width_coefficient"],
                                                   depth_coefficient=params["depth_coefficient"])
-    model = build_model(blocks_args, global_params)
 
-    if params["data_format"] == "channels_first":
-        features = tf.transpose(features, [0, 3, 1, 2])
+    with tf.Session() as sess:
+        model = build_model(blocks_args, global_params)
 
-    with tf.variable_scope("efficient-net-logits"):
-        logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
+        if params["data_format"] == "channels_first":
+            features = tf.transpose(features, [0, 3, 1, 2])
+
+        with tf.variable_scope("efficient-net"):
+            logits = model(features, training=mode == tf.estimator.ModeKeys.TRAIN)
         logits = tf.identity(logits, 'logits')
+
+        restore_model(sess, params["ckpt_dir"])
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
@@ -221,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument("--evaluation-interval", default=360, type=int,
                         help="Frequency of evaluation (and report to NNI)")
     parser.add_argument("--request-from-nni", default=False, action="store_true")
+    parser.add_argument("--ckpt-dir", default=None, type=str)
 
     args = parser.parse_args()
     if args.request_from_nni:

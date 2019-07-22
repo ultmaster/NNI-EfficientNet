@@ -2,7 +2,7 @@ import collections
 
 GlobalParams = collections.namedtuple('GlobalParams', [
     'batch_norm_momentum', 'batch_norm_epsilon', 'dropout_rate', 'data_format',
-    'num_classes', 'width_coefficient', 'depth_coefficient',
+    'num_classes', 'width_coefficient', 'depth_coefficient', 'image_size',
     'depth_divisor', 'min_depth', 'drop_connect_rate', 'relu_fn',
 ])
 GlobalParams.__new__.__defaults__ = (None,) * len(GlobalParams._fields)
